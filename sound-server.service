@@ -1,0 +1,21 @@
+[Unit]
+Description=Local Sound Server (token-auth audio queue)
+After=network.target sound.target
+
+[Service]
+Type=simple
+User=soundsvc
+Group=audio
+WorkingDirectory=/opt/sound-server
+EnvironmentFile=/etc/sound-server.env
+ExecStart=/opt/sound-server/.venv/bin/python /opt/sound-server/sound_server.py
+Restart=on-failure
+RestartSec=2
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
+ReadWritePaths=/tmp
+
+[Install]
+WantedBy=multi-user.target
