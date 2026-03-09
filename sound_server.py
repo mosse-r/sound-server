@@ -43,7 +43,7 @@ log = logging.getLogger("sound-server")
 @dataclass
 class Task:
     id: str
-    kind: str  # play-file | speak
+    kind: str  # play-file | play-bytes | speak
     payload: dict[str, Any]
     status: str = "queued"
     created_at: float = field(default_factory=time.time)
@@ -120,6 +120,18 @@ class PlaybackService:
             path = task.payload["path"]
             cmd = self._player_cmd(path)
             subprocess.run(cmd, check=True)
+            return
+
+        if task.kind == "play-bytes":
+            path = task.payload["path"]
+            try:
+                cmd = self._player_cmd(path)
+                subprocess.run(cmd, check=True)
+            finally:
+                try:
+                    Path(path).unlink(missing_ok=True)
+                except Exception:
+                    pass
             return
 
         if task.kind == "speak":
@@ -209,6 +221,15 @@ class ApiHandler(BaseHTTPRequestHandler):
         except json.JSONDecodeError:
             raise ValueError("Invalid JSON payload")
 
+    def _read_bytes(self) -> bytes:
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            raise ValueError("Invalid Content-Length")
+        if length <= 0:
+            raise ValueError("Missing request body")
+        return self.rfile.read(length)
+
     def _auth_ok(self) -> bool:
         if not API_TOKEN:
             return False
@@ -248,20 +269,19 @@ class ApiHandler(BaseHTTPRequestHandler):
         self._json(404, {"ok": False, "error": "not_found"})
 
     def do_POST(self) -> None:
-        if self.path not in {"/play-file", "/speak"}:
+        if self.path not in {"/play-file", "/play-bytes", "/speak"}:
             self._json(404, {"ok": False, "error": "not_found"})
             return
 
         if not self._require_auth():
             return
 
-        try:
-            payload = self._read_json()
-        except ValueError as e:
-            self._json(400, {"ok": False, "error": str(e)})
-            return
-
         if self.path == "/play-file":
+            try:
+                payload = self._read_json()
+            except ValueError as e:
+                self._json(400, {"ok": False, "error": str(e)})
+                return
             path = str(payload.get("path", "")).strip()
             if not path:
                 self._json(400, {"ok": False, "error": "Missing 'path'"})
@@ -274,7 +294,36 @@ class ApiHandler(BaseHTTPRequestHandler):
             self._json(202, {"ok": True, "task_id": task.id, "status": task.status})
             return
 
+        if self.path == "/play-bytes":
+            try:
+                raw = self._read_bytes()
+            except ValueError as e:
+                self._json(400, {"ok": False, "error": str(e)})
+                return
+
+            filename = self.headers.get("X-Filename", "audio.bin")
+            suffix = Path(filename).suffix or ".bin"
+            fd, tmp_path = tempfile.mkstemp(prefix="sound-server-upload-", suffix=suffix)
+            try:
+                with os.fdopen(fd, "wb") as f:
+                    f.write(raw)
+            except Exception:
+                try:
+                    Path(tmp_path).unlink(missing_ok=True)
+                except Exception:
+                    pass
+                raise
+
+            task = self.service.enqueue("play-bytes", {"path": tmp_path, "filename": filename})
+            self._json(202, {"ok": True, "task_id": task.id, "status": task.status})
+            return
+
         if self.path == "/speak":
+            try:
+                payload = self._read_json()
+            except ValueError as e:
+                self._json(400, {"ok": False, "error": str(e)})
+                return
             text = str(payload.get("text", "")).strip()
             if not text:
                 self._json(400, {"ok": False, "error": "Missing 'text'"})
