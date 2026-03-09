@@ -15,7 +15,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 apt-get update
 apt-get install -y python3 python3-venv python3-pip mpv ffmpeg espeak-ng alsa-utils curl
 
-id -u soundsvc >/dev/null 2>&1 || useradd --system --home-dir "${APP_DIR}" --create-home --shell /usr/sbin/nologin soundsvc
+id -u soundsvc >/dev/null 2>&1 || useradd --system --home-dir /var/lib/sound-server --create-home --shell /usr/sbin/nologin soundsvc
 usermod -aG audio soundsvc || true
 
 mkdir -p "${APP_DIR}"
@@ -51,8 +51,10 @@ systemctl daemon-reload
 systemctl enable sound-server
 systemctl restart sound-server
 
-echo "\nInstall complete."
+echo ""
+echo "Install complete."
 echo "Service status:"
 systemctl --no-pager --full status sound-server | sed -n '1,20p'
-echo "\nToken file: ${ENV_FILE}"
+echo ""
+echo "Token file: ${ENV_FILE}"
 echo "Health: curl -s http://127.0.0.1:8088/health"
