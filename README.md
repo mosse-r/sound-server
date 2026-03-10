@@ -7,8 +7,9 @@ Minimal local audio endpoint service for Pop!_OS/Ubuntu.
 - Endpoints:
   - `GET /health` (no auth)
   - `GET /status` (auth)
+  - `POST /play` with raw audio body (preferred, path-free, network-safe)
   - `POST /play-file` with JSON `{ "path": "/abs/path/file.wav" }`
-  - `POST /play-bytes` with raw audio body (path-free, network-safe)
+  - `POST /play-bytes` with raw audio body (legacy alias)
   - `POST /speak` with JSON `{ "text": "hello" }`
 - Single worker queue (no overlapping playback)
 - Playback backend auto-detection: `mpv` (default) → `ffplay` → `aplay`
@@ -61,6 +62,13 @@ curl -s -X POST http://127.0.0.1:8088/play-file \
   -d '{"path":"/home/frank/Music/test.mp3"}'
 
 # Path-free upload (recommended across machines)
+curl -s -X POST http://127.0.0.1:8088/play \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: audio/mpeg" \
+  -H "X-Filename: voice.mp3" \
+  --data-binary @/home/frank/Music/test.mp3
+
+# Legacy alias (still supported)
 curl -s -X POST http://127.0.0.1:8088/play-bytes \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: audio/mpeg" \

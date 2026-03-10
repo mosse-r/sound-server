@@ -269,7 +269,7 @@ class ApiHandler(BaseHTTPRequestHandler):
         self._json(404, {"ok": False, "error": "not_found"})
 
     def do_POST(self) -> None:
-        if self.path not in {"/play-file", "/play-bytes", "/speak"}:
+        if self.path not in {"/play", "/play-file", "/play-bytes", "/speak"}:
             self._json(404, {"ok": False, "error": "not_found"})
             return
 
@@ -294,7 +294,7 @@ class ApiHandler(BaseHTTPRequestHandler):
             self._json(202, {"ok": True, "task_id": task.id, "status": task.status})
             return
 
-        if self.path == "/play-bytes":
+        if self.path in {"/play", "/play-bytes"}:
             try:
                 raw = self._read_bytes()
             except ValueError as e:
