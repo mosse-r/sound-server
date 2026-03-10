@@ -4,18 +4,22 @@ After=network.target sound.target
 
 [Service]
 Type=simple
-User=soundsvc
+# Run as desktop user so mpv/Pulse/PipeWire can see the Bluetooth sink.
+User=mosser
 Group=audio
 WorkingDirectory=/opt/sound-server
 EnvironmentFile=/etc/sound-server.env
+Environment=HOME=/home/mosser
+Environment=XDG_RUNTIME_DIR=/run/user/1000
 ExecStart=/opt/sound-server/.venv/bin/python /opt/sound-server/sound_server.py
 Restart=on-failure
 RestartSec=2
 NoNewPrivileges=true
 PrivateTmp=true
-ProtectHome=true
-ProtectSystem=full
-ReadWritePaths=/tmp
+# Allow mpv/Pulse to use session runtime (Bluetooth etc.). strict keeps /run writable.
+ProtectHome=read-only
+ProtectSystem=strict
+ReadWritePaths=/tmp /run/user/1000
 
 [Install]
 WantedBy=multi-user.target

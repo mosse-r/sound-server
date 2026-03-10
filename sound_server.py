@@ -43,7 +43,7 @@ log = logging.getLogger("sound-server")
 @dataclass
 class Task:
     id: str
-    kind: str  # play-file | play-bytes | speak
+    kind: str  # play-bytes | speak
     payload: dict[str, Any]
     status: str = "queued"
     created_at: float = field(default_factory=time.time)
@@ -116,17 +116,22 @@ class PlaybackService:
         return wav
 
     def _run_task(self, task: Task) -> None:
-        if task.kind == "play-file":
-            path = task.payload["path"]
-            cmd = self._player_cmd(path)
-            subprocess.run(cmd, check=True)
-            return
-
         if task.kind == "play-bytes":
             path = task.payload["path"]
             try:
                 cmd = self._player_cmd(path)
-                subprocess.run(cmd, check=True)
+                r = subprocess.run(
+                    cmd,
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    env={**os.environ},
+                )
+                if r.returncode != 0:
+                    err = (r.stderr or "").strip() or (r.stdout or "").strip()
+                    raise RuntimeError(
+                        f"Command {cmd!r} exited {r.returncode}" + (f": {err}" if err else "")
+                    )
             finally:
                 try:
                     Path(path).unlink(missing_ok=True)
@@ -269,29 +274,11 @@ class ApiHandler(BaseHTTPRequestHandler):
         self._json(404, {"ok": False, "error": "not_found"})
 
     def do_POST(self) -> None:
-        if self.path not in {"/play", "/play-file", "/play-bytes", "/speak"}:
+        if self.path not in {"/play", "/play-bytes", "/speak"}:
             self._json(404, {"ok": False, "error": "not_found"})
             return
 
         if not self._require_auth():
-            return
-
-        if self.path == "/play-file":
-            try:
-                payload = self._read_json()
-            except ValueError as e:
-                self._json(400, {"ok": False, "error": str(e)})
-                return
-            path = str(payload.get("path", "")).strip()
-            if not path:
-                self._json(400, {"ok": False, "error": "Missing 'path'"})
-                return
-            p = Path(path)
-            if not p.exists() or not p.is_file():
-                self._json(400, {"ok": False, "error": "Path does not exist or is not a file"})
-                return
-            task = self.service.enqueue("play-file", {"path": str(p.resolve())})
-            self._json(202, {"ok": True, "task_id": task.id, "status": task.status})
             return
 
         if self.path in {"/play", "/play-bytes"}:

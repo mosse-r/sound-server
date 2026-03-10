@@ -8,8 +8,7 @@ Minimal local audio endpoint service for Pop!_OS/Ubuntu.
   - `GET /health` (no auth)
   - `GET /status` (auth)
   - `POST /play` with raw audio body (preferred, path-free, network-safe)
-  - `POST /play-file` with JSON `{ "path": "/abs/path/file.wav" }`
-  - `POST /play-bytes` with raw audio body (legacy alias)
+  - `POST /play-bytes` with raw audio body (legacy alias for /play)
   - `POST /speak` with JSON `{ "text": "hello" }`
 - Single worker queue (no overlapping playback)
 - Playback backend auto-detection: `mpv` (default) → `ffplay` → `aplay`
@@ -56,24 +55,19 @@ curl -s -X POST http://127.0.0.1:8088/speak \
   -H "Content-Type: application/json" \
   -d '{"text":"Hello from sound server"}'
 
-curl -s -X POST http://127.0.0.1:8088/play-file \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"path":"/home/frank/Music/test.mp3"}'
-
-# Path-free upload (recommended across machines)
+# Path-free upload (bytes only; recommended)
 curl -s -X POST http://127.0.0.1:8088/play \
   -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: audio/mpeg" \
-  -H "X-Filename: voice.mp3" \
-  --data-binary @/home/frank/Music/test.mp3
+  -H "Content-Type: audio/wav" \
+  -H "X-Filename: beep.wav" \
+  --data-binary @test-assets/beep.wav
 
-# Legacy alias (still supported)
+# Legacy alias (same as /play)
 curl -s -X POST http://127.0.0.1:8088/play-bytes \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: audio/mpeg" \
   -H "X-Filename: voice.mp3" \
-  --data-binary @/home/frank/Music/test.mp3
+  --data-binary @your-file.mp3
 ```
 
 ## Bluetooth / specific output device
@@ -99,6 +93,14 @@ sudo apt-get install -y jq
 export SOUND_SERVER_TOKEN="$(grep '^SOUND_SERVER_TOKEN=' /etc/sound-server.env | cut -d= -f2-)"
 ./smoke-test.sh
 ```
+
+## End-to-end play test
+Uses `test-assets/beep.wav` to confirm `/play` and playback work:
+```bash
+export SOUND_SERVER_TOKEN="$(grep '^SOUND_SERVER_TOKEN=' /etc/sound-server.env | cut -d= -f2-)"
+./test-e2e-play.sh
+```
+You should hear a short beep and see "E2E play test passed."
 
 ## Security notes
 - Binds to `127.0.0.1` by default
