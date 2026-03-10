@@ -61,6 +61,9 @@ class PlaybackService:
         self.current: Task | None = None
         self.shutdown = threading.Event()
         self.backend = self._resolve_backend()
+        self.proc_lock = threading.Lock()
+        self.current_proc: subprocess.Popen[str] | None = None
+        self.cancelled_ids: set[str] = set()
         self.worker = threading.Thread(target=self._worker_loop, daemon=True)
         self.worker.start()
 
@@ -120,19 +123,24 @@ class PlaybackService:
             path = task.payload["path"]
             try:
                 cmd = self._player_cmd(path)
-                r = subprocess.run(
+                proc = subprocess.Popen(
                     cmd,
-                    check=False,
-                    capture_output=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
                     text=True,
                     env={**os.environ},
                 )
-                if r.returncode != 0:
-                    err = (r.stderr or "").strip() or (r.stdout or "").strip()
+                with self.proc_lock:
+                    self.current_proc = proc
+                stdout, stderr = proc.communicate()
+                if proc.returncode != 0:
+                    err = (stderr or "").strip() or (stdout or "").strip()
                     raise RuntimeError(
-                        f"Command {cmd!r} exited {r.returncode}" + (f": {err}" if err else "")
+                        f"Command {cmd!r} exited {proc.returncode}" + (f": {err}" if err else "")
                     )
             finally:
+                with self.proc_lock:
+                    self.current_proc = None
                 try:
                     Path(path).unlink(missing_ok=True)
                 except Exception:
@@ -144,8 +152,24 @@ class PlaybackService:
             wav = self._speak_to_temp_file(text)
             try:
                 cmd = self._player_cmd(wav)
-                subprocess.run(cmd, check=True)
+                proc = subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    env={**os.environ},
+                )
+                with self.proc_lock:
+                    self.current_proc = proc
+                stdout, stderr = proc.communicate()
+                if proc.returncode != 0:
+                    err = (stderr or "").strip() or (stdout or "").strip()
+                    raise RuntimeError(
+                        f"Command {cmd!r} exited {proc.returncode}" + (f": {err}" if err else "")
+                    )
             finally:
+                with self.proc_lock:
+                    self.current_proc = None
                 try:
                     Path(wav).unlink(missing_ok=True)
                     Path(wav).parent.rmdir()
@@ -154,6 +178,43 @@ class PlaybackService:
             return
 
         raise RuntimeError(f"Unsupported task type: {task.kind}")
+
+    def stop_all(self) -> dict[str, Any]:
+        cleared = 0
+        while True:
+            try:
+                t = self.q.get_nowait()
+            except queue.Empty:
+                break
+            t.status = "cancelled"
+            t.error = "stopped"
+            t.finished_at = time.time()
+            self.cancelled_ids.add(t.id)
+            cleared += 1
+            self.q.task_done()
+
+        stopped_current = False
+        current_id = None
+        if self.current is not None:
+            current_id = self.current.id
+            self.cancelled_ids.add(self.current.id)
+
+        with self.proc_lock:
+            proc = self.current_proc
+
+        if proc is not None and proc.poll() is None:
+            stopped_current = True
+            proc.terminate()
+            try:
+                proc.wait(timeout=1.5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+
+        return {
+            "stopped": stopped_current,
+            "cleared": cleared,
+            "current_task_id": current_id,
+        }
 
     def _worker_loop(self) -> None:
         while not self.shutdown.is_set():
@@ -166,11 +227,19 @@ class PlaybackService:
             task.started_at = time.time()
             try:
                 self._run_task(task)
-                task.status = "done"
+                if task.id in self.cancelled_ids:
+                    task.status = "cancelled"
+                    task.error = "stopped"
+                else:
+                    task.status = "done"
             except Exception as e:
-                task.status = "failed"
-                task.error = str(e)
-                log.exception("Task %s failed", task.id)
+                if task.id in self.cancelled_ids:
+                    task.status = "cancelled"
+                    task.error = "stopped"
+                else:
+                    task.status = "failed"
+                    task.error = str(e)
+                    log.exception("Task %s failed", task.id)
             finally:
                 task.finished_at = time.time()
                 self.current = None
@@ -274,7 +343,7 @@ class ApiHandler(BaseHTTPRequestHandler):
         self._json(404, {"ok": False, "error": "not_found"})
 
     def do_POST(self) -> None:
-        if self.path not in {"/play", "/play-bytes", "/speak"}:
+        if self.path not in {"/play", "/play-bytes", "/speak", "/stop"}:
             self._json(404, {"ok": False, "error": "not_found"})
             return
 
@@ -303,6 +372,11 @@ class ApiHandler(BaseHTTPRequestHandler):
 
             task = self.service.enqueue("play-bytes", {"path": tmp_path, "filename": filename})
             self._json(202, {"ok": True, "task_id": task.id, "status": task.status})
+            return
+
+        if self.path == "/stop":
+            result = self.service.stop_all()
+            self._json(200, {"ok": True, **result})
             return
 
         if self.path == "/speak":

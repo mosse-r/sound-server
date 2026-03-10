@@ -10,6 +10,7 @@ Minimal local audio endpoint service for Pop!_OS/Ubuntu.
   - `POST /play` with raw audio body (preferred, path-free, network-safe)
   - `POST /play-bytes` with raw audio body (legacy alias for /play)
   - `POST /speak` with JSON `{ "text": "hello" }`
+  - `POST /stop` to stop current playback and clear queue
 - Single worker queue (no overlapping playback)
 - Playback backend auto-detection: `mpv` (default) → `ffplay` → `aplay`
 - Optional audio device selection (`SOUND_SERVER_AUDIO_DEVICE`)
@@ -54,6 +55,10 @@ curl -s -X POST http://127.0.0.1:8088/speak \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"text":"Hello from sound server"}'
+
+# Emergency stop: stop current playback + clear queue
+curl -s -X POST http://127.0.0.1:8088/stop \
+  -H "Authorization: Bearer $TOKEN"
 
 # Path-free upload (bytes only; recommended)
 curl -s -X POST http://127.0.0.1:8088/play \
