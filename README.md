@@ -107,6 +107,62 @@ export SOUND_SERVER_TOKEN="$(grep '^SOUND_SERVER_TOKEN=' /etc/sound-server.env |
 ```
 You should hear a short beep and see "E2E play test passed."
 
+## Push-to-talk (office hotkey) -> Telegram
+
+This project includes an optional desk workflow for "press key, talk, release, send to Frank":
+
+- `setup-office-ptt.sh` (recommended one-shot setup)
+- `install-whisper.sh` (Whisper-only helper)
+- `install-ptt.sh` (legacy split setup)
+- `ptt-record.sh` (`start|stop|toggle`)
+
+### 1) Setup (one-time, recommended)
+```bash
+cd /home/frank/.openclaw/workspace/projects/sound-server
+./setup-office-ptt.sh
+```
+
+Optional overrides:
+```bash
+./setup-office-ptt.sh --bot-token "<TELEGRAM_BOT_TOKEN>" --chat-id "86332998" --hotkey "Ctrl+Alt+Space"
+```
+
+Reset only Telegram/hotkey in an existing config:
+```bash
+./setup-office-ptt.sh --reset-telegram --bot-token "<NEW_TOKEN>" --chat-id "86332998"
+./setup-office-ptt.sh --reset-hotkey --hotkey "Ctrl+Alt+Space"
+```
+
+This writes config to:
+`~/.config/sound-server-ptt/config.json`
+
+### 2) Bind keyboard shortcut(s)
+Bind your desktop hotkey to one of these:
+
+- Toggle mode (single key):
+```bash
+/home/frank/.openclaw/workspace/projects/sound-server/ptt-record.sh toggle
+```
+
+- Push-to-talk style (press/release via two bindings):
+```bash
+/home/frank/.openclaw/workspace/projects/sound-server/ptt-record.sh start
+/home/frank/.openclaw/workspace/projects/sound-server/ptt-record.sh stop
+```
+
+### 3) Beeps
+`start_beep` and `stop_beep` are configurable in `config.json`.
+
+### STT requirement
+Default config expects the `whisper` CLI to be available on the office machine.
+If missing, recording still works but transcript send will fail with a Telegram notice.
+
+Install helper included:
+```bash
+cd /home/frank/.openclaw/workspace/projects/sound-server
+./install-whisper.sh --model base
+```
+
 ## Security notes
 - Binds to `127.0.0.1` by default
 - All mutating endpoints require token auth
