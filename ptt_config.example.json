@@ -1,0 +1,19 @@
+{
+  "telegram": {
+    "bot_token": "PUT_TELEGRAM_BOT_TOKEN_HERE",
+    "chat_id": "86332998"
+  },
+  "audio": {
+    "device": "default",
+    "rate_hz": 16000,
+    "channels": 1,
+    "format": "S16_LE",
+    "start_beep": "/opt/sound-server/test-assets/beep.wav",
+    "stop_beep": "/opt/sound-server/test-assets/beep.wav"
+  },
+  "stt": {
+    "command_template": "whisper '{input}' --model base --language en --output_format txt --output_dir '{output_dir}' --fp16 False",
+    "result_file_template": "{output_dir}/{input_stem}.txt"
+  },
+  "hotkey_hint": "Ctrl+Alt+Space"
+}
