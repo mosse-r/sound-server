@@ -18,8 +18,9 @@ Minimal local audio endpoint service for Pop!_OS/Ubuntu.
 - Security defaults: localhost bind + shared token required
 
 ## Quick install (server)
+Clone the repo and run the installer on the machine where the service will run:
 ```bash
-cd /home/frank/.openclaw/workspace/projects/sound-server
+cd /path/to/sound-server
 sudo bash install.sh
 ```
 
@@ -107,61 +108,58 @@ export SOUND_SERVER_TOKEN="$(grep '^SOUND_SERVER_TOKEN=' /etc/sound-server.env |
 ```
 You should hear a short beep and see "E2E play test passed."
 
-## Push-to-talk (office hotkey) -> Telegram
+## Push-to-talk (hotkey) → Telegram (as yourself)
 
-This project includes an optional desk workflow for "press key, talk, release, send to Frank":
+Optional workflow: press key, talk, release → recording is transcribed and sent to Telegram **as you** (user account, not a bot).
 
-- `setup-office-ptt.sh` (recommended one-shot setup)
-- `install-whisper.sh` (Whisper-only helper)
-- `install-ptt.sh` (legacy split setup)
-- `ptt-record.sh` (`start|stop|toggle`)
+- `setup-ptt.sh` — one-shot setup (deps, Whisper, config)
+- `install-ptt.sh` — minimal install (config only, no Whisper)
+- `install-whisper.sh` — Whisper CLI only
+- `ptt-record.sh` — `start` / `stop` / `toggle` recording
+- `telegram_login.py` — one-time login to create session
+- `telegram_send.py` — send one message (used by ptt-record)
 
-### 1) Setup (one-time, recommended)
+### 1) Get Telegram API credentials
+Create an app at https://my.telegram.org/apps and note **api_id** and **api_hash**.
+
+### 2) Setup (one-time)
+From the repo directory on the machine where you’ll use PTT:
 ```bash
-cd /home/frank/.openclaw/workspace/projects/sound-server
-./setup-office-ptt.sh
+cd /path/to/sound-server
+./setup-ptt.sh --api-id YOUR_API_ID --api-hash "YOUR_API_HASH" [--target "me"] [--hotkey "Ctrl+Alt+Space"]
 ```
+`--target "me"` sends to your Saved Messages; you can use a chat id or username instead.
 
-Optional overrides:
+### 3) Log in as yourself (one-time)
+Messages are sent from your Telegram account, not a bot. Create a session once:
 ```bash
-./setup-office-ptt.sh --bot-token "<TELEGRAM_BOT_TOKEN>" --chat-id "86332998" --hotkey "Ctrl+Alt+Space"
+python3 telegram_login.py ~/.config/sound-server-ptt/config.json
 ```
+Enter your phone number and the code Telegram sends you (and 2FA password if enabled).
 
-Reset only Telegram/hotkey in an existing config:
-```bash
-./setup-office-ptt.sh --reset-telegram --bot-token "<NEW_TOKEN>" --chat-id "86332998"
-./setup-office-ptt.sh --reset-hotkey --hotkey "Ctrl+Alt+Space"
-```
+### 4) Bind keyboard shortcut(s)
+Two styles:
 
-This writes config to:
-`~/.config/sound-server-ptt/config.json`
+- **(a) One button** — Press to start recording, press again to stop. Bind the **toggle** command.
+- **(b) Hold-to-talk** — Hold the key while talking, release to stop. Bind **start** on key-down and **stop** on key-up (requires a tool that supports key release, e.g. xbindkeys).
 
-### 2) Bind keyboard shortcut(s)
-Bind your desktop hotkey to one of these:
+Use the **full path** to `ptt-record.sh`. Run `./ptt-bind-keys.sh` to print the exact commands for your install. Config: `~/.config/sound-server-ptt/config.json`.
 
-- Toggle mode (single key):
-```bash
-/home/frank/.openclaw/workspace/projects/sound-server/ptt-record.sh toggle
-```
+**Ubuntu / Pop!_OS / GNOME (one-button toggle):**
+1. **Settings → Keyboard → Keyboard Shortcuts** (or **Custom Shortcuts**).
+2. Add shortcut: name e.g. “PTT Toggle”, command:
+   ```bash
+   /path/to/sound-server/ptt-record.sh toggle --config ~/.config/sound-server-ptt/config.json
+   ```
+3. Assign a key (e.g. **Ctrl+Alt+Space**).
 
-- Push-to-talk style (press/release via two bindings):
-```bash
-/home/frank/.openclaw/workspace/projects/sound-server/ptt-record.sh start
-/home/frank/.openclaw/workspace/projects/sound-server/ptt-record.sh stop
-```
+**Hold-to-talk:** Most DE shortcuts only fire on key press. For key-down → start, key-up → stop, use **xbindkeys** and bind `start` to the key press and `stop` to the key release (see `xbindkeys -k` to get key codes).
 
-### 3) Beeps
-`start_beep` and `stop_beep` are configurable in `config.json`.
+**Test:** Run `./test-ptt-toggle.sh` to verify toggle start/stop without “PTT busy”.
 
-### STT requirement
-Default config expects the `whisper` CLI to be available on the office machine.
-If missing, recording still works but transcript send will fail with a Telegram notice.
-
-Install helper included:
-```bash
-cd /home/frank/.openclaw/workspace/projects/sound-server
-./install-whisper.sh --model base
-```
+### 5) Beeps and STT
+- `start_beep` and `stop_beep` in config are optional (leave empty for none). If `test-assets/beep.wav` exists in the repo, setup uses it.
+- STT uses the `whisper` CLI. Setup installs it by default; or run `./install-whisper.sh --model base` separately. If Whisper is missing, recording works but sending the transcript will fail.
 
 ## Security notes
 - Binds to `127.0.0.1` by default

@@ -5,3 +5,5 @@ __pycache__/
 *.log
 *.wav
 !test-assets/beep.wav
+ptt-beeps/*.mp3
+ptt-beeps/*.wav

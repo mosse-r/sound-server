@@ -1,19 +1,31 @@
 {
   "telegram": {
-    "bot_token": "PUT_TELEGRAM_BOT_TOKEN_HERE",
-    "chat_id": "86332998"
+    "mode": "user",
+    "api_id": "YOUR_API_ID",
+    "api_hash": "YOUR_API_HASH",
+    "session_path": "~/.config/sound-server-ptt/telegram.session",
+    "target": "me"
   },
   "audio": {
     "device": "default",
     "rate_hz": 16000,
     "channels": 1,
     "format": "S16_LE",
-    "start_beep": "/opt/sound-server/test-assets/beep.wav",
-    "stop_beep": "/opt/sound-server/test-assets/beep.wav"
+    "start_beep": "",
+    "stop_beep": "",
+    "error_beep": "",
+    "beep_volume": 1,
+    "dim_volume_on_record": false,
+    "dim_volume_percent": 25
   },
   "stt": {
     "command_template": "whisper '{input}' --model base --language en --output_format txt --output_dir '{output_dir}' --fp16 False",
     "result_file_template": "{output_dir}/{input_stem}.txt"
+  },
+  "notifications": {
+    "enabled": true,
+    "sent_timeout_sec": 10,
+    "recording_timeout_sec": 60
   },
   "hotkey_hint": "Ctrl+Alt+Space"
 }
